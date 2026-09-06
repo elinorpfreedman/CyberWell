@@ -1,0 +1,10 @@
+{
+  "n_questions": 25,
+  "n_errored": 0,
+  "n_answerable": 21,
+  "n_absent": 4,
+  "hit_rate_at_3": 0.762,
+  "hit_rate_at_5": 0.857,
+  "ablation_delta_5_minus_3": 0.095,
+  "abstain_accuracy_on_absent": 1.0
+}

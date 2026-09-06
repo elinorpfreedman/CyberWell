@@ -1,0 +1,15 @@
+# --- LLM + embeddings ---
+google-genai
+numpy
+
+# --- corpus fetching / parsing ---
+requests
+beautifulsoup4
+pypdf
+
+# --- API ---
+flask
+flask-cors
+
+# --- config ---
+python-dotenv
