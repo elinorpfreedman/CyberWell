@@ -1,87 +1,95 @@
 # Error Analysis
 
-Run against the current (partial) index: 8 usable documents (7 YouTube + 1 TikTok --
-see the corpus-completeness caveat at the bottom). 25 questions, graded by hand.
+Final run against the complete corpus: 36 documents across Meta, YouTube, TikTok, X, and
+Reddit (675 chunks). 35 questions, graded by hand.
 
 ## Results
 
 | Metric | Value |
 | :--- | :--- |
-| Hit rate@3 | 0.762 |
-| Hit rate@5 | 0.857 |
-| Ablation delta (5 - 3) | +0.095 |
-| Abstain accuracy on absent questions | 1.0 (4/4) |
-| Grades | 22 correct, 2 partially correct, 1 incorrect, 0 unsupported |
+| Hit rate@3 | 0.812 |
+| Hit rate@5 | 0.812 |
+| Ablation delta (5 - 3) | 0.0 |
+| Abstain accuracy on absent questions | 1.0 (3/3) |
+| Grades | 32 correct, 1 partially correct, 2 incorrect, 0 unsupported |
 
-## Finding 1: a chunk-overlap boundary artifact caused two real errors
+An earlier pass of this file analyzed a partial 8-document corpus (25 questions, hit@3=0.762,
+hit@5=0.857). Growing the corpus to 36 documents changed which failure modes actually show
+up -- some earlier findings (a chunk-overlap boundary bug) turned out to be non-reproducing
+noise once the corpus grew, while new ones appeared that only show up at this scale.
 
-`src/chunking.py` splits on a fixed character window with 150 characters of overlap.
-For `DOC-15` (YouTube's strike system), the "Second Strike" heading and its qualifying
-clause ("if you get a second strike **within the same 90-day period as your first
-strike**...") landed in chunk `DOC-15-005`, but chunk `DOC-15-006` -- built from the
-150-char overlap -- opens mid-sentence with just the tail: *"first strike, you will not
-be allowed to post content for 2 weeks."* Read in isolation, that fragment reads as "a
-first strike costs you 2 weeks," which is wrong (a first strike is 1 week; 2 weeks is
-the second-strike penalty).
+## Finding 1: hit rate@k has a blind spot for corpus-wide duplicated boilerplate
 
-Both chunks were retrieved together in every case this came up, so the model had the
-correct context available, but still leaned on the misleading fragment:
-- **Q10** ("how long after a first strike") led with the wrong "2 weeks" claim, then
-  separately and correctly cited `DOC-15-004` for 1 week later in the same answer --
-  self-contradictory.
-- **Q17** (compare first through third strike) stated 2 weeks for *both* the first and
-  second strike, collapsing the exact escalation the question asked about.
+Q9 asks how long a YouTube warning takes to expire. The chunk it's pinned to (`DOC-15-002`)
+states the fact, but so does the same shared "what happens when you get a strike" summary
+box embedded verbatim near the end of essentially every other YouTube help article --
+`DOC-12`, `DOC-13`, `DOC-16`, `DOC-17`, `DOC-19`, `DOC-20`, `DOC-51` all carry a copy. At k=5,
+retrieval found five of those *other* valid copies and none of the pinned one, so `hit_at_5`
+reads `false` even though the model answered correctly from equally legitimate sources.
 
-**Why it matters:** this is a structural chunking problem, not a retrieval or prompt
-problem -- overlap-based splitting can sever a heading from the sentence that gives it
-meaning, producing a fragment that reads as complete and confident but is actually
-misattributed.
+**Why it matters:** a single-chunk_id ground truth silently gets less meaningful as the
+corpus grows and a fact's exact wording is duplicated across more source documents --
+hit rate@k measures whether the *specific pinned chunk* was retrieved, not whether *a*
+correct source was. On a 36-document corpus this already produces a few of these "misses";
+on a much larger real-world corpus it would happen far more often for any near-universal
+boilerplate fact.
 
-**Fix to try:** chunk on structural boundaries (headings, list items) instead of a pure
-character count, or at minimum prefix each chunk with the nearest preceding heading so a
-fragment can't lose its "which strike is this" context.
+**Fix to try:** grade hit@k against a fact's full duplicate-chunk set (found by exact-text
+match across the corpus at test-set-build time) rather than a single pinned id, or add a
+distinct metric for "was the *fact* retrievable" vs. "was *this exact chunk* retrievable."
 
-## Finding 2: cross-document comparison questions have a real retrieval gap
+## Finding 2: a previously-real chunking bug turned out to be non-reproducing
 
-All 3 comparison questions whose two facts live in different, topically-distant
-documents (Q19: advertiser guidelines vs. hate speech; Q20: illegal goods vs. harmful
-content; Q21: TikTok bullying exceptions vs. YouTube EDSA) retrieved **zero** of their
-expected chunks at k=5. A single embedded query for "compare X and Y" tends to land
-between X and Y in embedding space rather than close to either one specifically, so nothing
-genuinely relevant surfaces.
+The smaller-corpus error analysis reported that YouTube's strike-system page had a chunk
+whose "Second Strike... 2 weeks" heading was overlap-split from its qualifying clause,
+causing two wrong answers. Re-verifying against the current chunking (after an unrelated fix
+to `loading.py`'s tag-stripping, which shifted this document's chunk boundaries by one), the
+exact same underlying content is still split the same way -- but on this run, retrieval
+happened to surface the chunk that still carries the "First Strike"/"Second Strike" headings
+attached, and both comparison questions that previously got this wrong (Q10, Q17) answered
+correctly. The underlying fragility is still there structurally (see the chunking module's
+docstring), it just didn't happen to bite this time. **Lesson:** a chunking artifact found
+once should be described as "a fragile chunk boundary exists here," not "this specific
+question fails" -- which chunk gets retrieved (and whether the fragile one wins) can change
+with unrelated changes elsewhere in the pipeline.
 
-The system did the *right* thing given that miss -- it correctly abstained rather than
-answering from irrelevant retrieved context, so these are graded "correct," not
-"incorrect." But the practical effect is the same as not having an answer: the corpus
-does contain the information, retrieval just didn't find it. In contrast, the two
-comparison questions that succeeded (Q16, Q18) both had their two facts living in the
-same or adjacent documents, which a single query handles fine.
+## Finding 3: generation sometimes abstains even when retrieval succeeds
 
-**Fix to try:** query decomposition for comparison-shaped questions -- split "compare A
-and B" into two separate retrievals (one biased toward A, one toward B) and merge the
-results, instead of embedding the compound question as one query.
+Two questions (Q14, Q18) got the correct chunk(s) at both k=3 and k=5, but the model still
+answered "I could not find an answer to this in the corpus":
+- Q14 asks for a *count* of a list that's fully present in the retrieved chunk -- the model
+  won't count items itself, treating that as forbidden "outside" inference.
+- Q18 asks for a **comparison across two platforms**, and even with both platforms' relevant
+  chunks in context, the model abstained rather than synthesizing them.
 
-## Finding 3: one unnecessary abstention on a derivable answer
+This is a different, more concerning failure mode than Finding 4 below (retrieval actually
+failing) -- here the grounding is available and the model still declines. Cross-referenced
+against Finding 4, generation seems to have a lower bar for abstaining on *comparison-shaped*
+questions specifically, independent of whether retrieval actually succeeded.
 
-Q14 ("how many protected-attribute categories") retrieved the correct chunk
-(`DOC-12-001`) at both k=3 and k=5 -- it lists all 9 attributes verbatim -- but the model
-refused to answer because the source text never states the number "9" explicitly. It
-declined to simply count a list that was fully in front of it.
+**Fix to try:** loosen the system prompt to explicitly permit (a) counting/aggregating
+retrieved items and (b) synthesizing an explicit comparison when both sides' facts are
+present in context, while keeping the no-outside-facts rule for everything else.
 
-**Why it matters:** the grounding instruction ("don't fill gaps with outside knowledge")
-is working as intended for facts not in the corpus, but it's also suppressing a trivial,
-zero-risk inference (counting retrieved items) that isn't "outside knowledge" at all.
+## Finding 4: cross-document comparisons still have a real retrieval gap
 
-**Fix to try:** soften the system prompt to explicitly allow simple counting/aggregation
-over the retrieved text itself, while keeping the no-outside-facts rule intact for
-everything else.
+Comparisons whose two facts live in topically-distant documents continue to fail at
+retrieval: Q20 (illegal goods vs. harmful content firearms) and Q21 (TikTok vs. YouTube
+exceptions) both missed their expected chunks at k=5, same pattern as the smaller-corpus run.
+Q19 looks like a miss by the strict hit@k metric but actually retrieved different, still-
+relevant chunks from the same two target documents and answered correctly from them --
+a reminder that hit@k is a proxy, and sometimes the proxy undercounts a system that's
+actually working (see Finding 1 for the general shape of this problem).
 
-## Corpus-completeness caveat
+**Fix to try:** unchanged from the smaller-corpus analysis -- query decomposition for
+comparison-shaped questions (retrieve once per side of the comparison, merge results).
 
-This run only exercises 8 of the 37 documents in the current manifest (7 YouTube + 1
-TikTok) -- the rest either haven't been fetched yet or were fetched but turned out to be
-JS-shell/nav-boilerplate content, not real policy text (see the corpus work still
-pending). The 4 "absent" questions about Meta, X, and Reddit are absent only because
-those platforms aren't usable in the index *yet*, not because they're permanently out of
-scope -- once the corpus is completed, this test set and its hit-rate numbers should be
-re-run, since both are expected to change.
+## Summary across both corpus sizes
+
+The two genuine, reproducible weaknesses are the same at both scales: **cross-document
+comparison retrieval** (Finding 4here, Finding 2 in the original analysis) and **generation
+being too quick to abstain on some question shapes** (Finding 3 here, Finding 3 originally).
+The chunk-overlap boundary bug (original Finding 1) did not reproduce here and should be
+read as "a real fragility, severity depends on what gets retrieved" rather than a fixed
+defect. The corpus-completeness caveat from the original analysis is resolved -- all 36
+manifest documents are now indexed and exercised by the test set.

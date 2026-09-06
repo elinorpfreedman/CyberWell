@@ -1,7 +1,7 @@
 """Embed every chunk and save the vector index.
 
 Reads data/processed/chunks.jsonl (see src/chunking.py), embeds each chunk's
-text with Gemini's text-embedding-004 (task_type=retrieval_document), and
+text with Gemini's gemini-embedding-2 (task_type=retrieval_document), and
 writes:
   - data/processed/index.npy       a (n_chunks, 768) float32 array of embeddings
   - data/processed/index_meta.json a list of chunk metadata, same row order
@@ -29,7 +29,7 @@ load_dotenv()
 
 CHUNKS_PATH = Path("data/processed/chunks.jsonl")
 OUT_DIR = Path("data/processed")
-EMBED_MODEL = os.environ.get("CW_EMBED_MODEL", "gemini-embedding-001")
+EMBED_MODEL = os.environ.get("CW_EMBED_MODEL", "gemini-embedding-2")
 BATCH_SIZE = 20  # kept small so a free-tier rate limit hit only costs one small batch
 MAX_RETRIES = 5
 RETRY_BACKOFF_SECONDS = 30  # free-tier embed_content quota resets are ~30-60s
@@ -47,12 +47,21 @@ def _client():
     return genai.Client(api_key=api_key)
 
 
-def embed_texts(client, texts: list[str], task_type: str, model: str = EMBED_MODEL) -> np.ndarray:
-    """Embed `texts` in batches, retrying transient failures with backoff."""
+def embed_texts(client, texts: list[str], task_type: str, checkpoint_path: Path, model: str = EMBED_MODEL) -> np.ndarray:
+    """Embed `texts` in batches, retrying transient failures with backoff.
+
+    Saves a checkpoint after every batch, so a hard failure partway through
+    (a free-tier daily quota cap, say) loses at most one batch of progress,
+    not the whole run -- rerunning the script picks up where it left off.
+    """
     from google.genai import types
 
-    all_vectors: list[list[float]] = []
-    for start in range(0, len(texts), BATCH_SIZE):
+    done: list[list[float]] = []
+    if checkpoint_path.exists():
+        done = np.load(checkpoint_path).tolist()
+        print(f"Resuming from checkpoint: {len(done)}/{len(texts)} chunks already embedded.")
+
+    for start in range(len(done), len(texts), BATCH_SIZE):
         batch = texts[start : start + BATCH_SIZE]
         for attempt in range(MAX_RETRIES):
             try:
@@ -61,17 +70,38 @@ def embed_texts(client, texts: list[str], task_type: str, model: str = EMBED_MOD
                     contents=batch,
                     config=types.EmbedContentConfig(task_type=task_type),
                 )
-                all_vectors.extend(e.values for e in result.embeddings)
+                # Some models silently ignore extra items in a batched `contents`
+                # list and return just one embedding instead of raising -- verify
+                # the count instead of trusting it, or a mismatch would silently
+                # misalign every later chunk_id against the wrong vector.
+                if len(result.embeddings) != len(batch):
+                    result_embeddings = []
+                    for text in batch:
+                        single = client.models.embed_content(
+                            model=model, contents=[text], config=types.EmbedContentConfig(task_type=task_type)
+                        )
+                        result_embeddings.append(single.embeddings[0])
+                        time.sleep(0.3)
+                else:
+                    result_embeddings = result.embeddings
+                done.extend(e.values for e in result_embeddings)
                 break
             except Exception as exc:
                 if attempt == MAX_RETRIES - 1:
-                    raise RuntimeError(f"Embedding batch starting at {start} failed: {exc}") from exc
+                    # Save what we have before giving up -- a daily quota cap won't
+                    # clear with more retries, but the next run shouldn't redo this work.
+                    np.save(checkpoint_path, np.array(done, dtype="float32"))
+                    raise RuntimeError(
+                        f"Embedding batch starting at {start} failed: {exc}\n"
+                        f"Progress saved ({len(done)}/{len(texts)} chunks) -- rerun this script to resume."
+                    ) from exc
                 wait = RETRY_BACKOFF_SECONDS * (attempt + 1)
                 print(f"  batch at {start} failed ({exc}); retrying in {wait}s...")
                 time.sleep(wait)
         print(f"  embedded {min(start + BATCH_SIZE, len(texts))}/{len(texts)}")
+        np.save(checkpoint_path, np.array(done, dtype="float32"))
         time.sleep(INTER_BATCH_DELAY_SECONDS)
-    return np.array(all_vectors, dtype="float32")
+    return np.array(done, dtype="float32")
 
 
 def build_index(chunks_path: Path, out_dir: Path) -> None:
@@ -81,12 +111,19 @@ def build_index(chunks_path: Path, out_dir: Path) -> None:
 
     client = _client()
     texts = [c["text"] for c in chunks]
+    checkpoint_path = out_dir / ".build_index_checkpoint.npy"
     print(f"Embedding {len(texts)} chunks with '{EMBED_MODEL}'...")
-    embeddings = embed_texts(client, texts, task_type="retrieval_document")
+    embeddings = embed_texts(client, texts, task_type="retrieval_document", checkpoint_path=checkpoint_path)
+    if embeddings.shape[0] != len(chunks):
+        raise RuntimeError(
+            f"Embedded {embeddings.shape[0]} vectors but there are {len(chunks)} chunks -- "
+            "refusing to save a misaligned index."
+        )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(out_dir / "index.npy", embeddings)
     (out_dir / "index_meta.json").write_text(json.dumps(chunks), encoding="utf-8")
+    checkpoint_path.unlink(missing_ok=True)
 
     print(f"Saved {embeddings.shape[0]} vectors of dim {embeddings.shape[1]} -> {out_dir/'index.npy'}")
     print(f"Saved matching metadata -> {out_dir/'index_meta.json'}")

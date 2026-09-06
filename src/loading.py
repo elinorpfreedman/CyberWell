@@ -35,7 +35,10 @@ class Document:
 
 def load_html(path: Path) -> Document:
     soup = BeautifulSoup(path.read_text(encoding="utf-8", errors="replace"), "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header"]):
+    # Note: <header> is deliberately NOT stripped here -- unlike <nav>/<footer>, it isn't
+    # reliably just site chrome (one source page had its entire real article wrapped in a
+    # <header> tag, and stripping it silently zeroed out the whole document).
+    for tag in soup(["script", "style", "nav", "footer"]):
         tag.decompose()
     title = soup.title.string.strip() if soup.title and soup.title.string else path.stem
     text = " ".join(soup.get_text(separator=" ").split())

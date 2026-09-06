@@ -25,9 +25,10 @@ Thumbs.db
 # Logs
 *.log
 
-# Local data
-data/
-.env
-__pycache__/
+# Raw fetched corpus: reproducible from data/MANIFEST.md via src/fetch_corpus.py,
+# and large/not-clearly-redistributable at ~35MB -- see the assignment's own allowance
+# for this. data/processed/ (cleaned text + chunks + embeddings, our own derived
+# artifacts) and data/MANIFEST.md ARE committed.
+data/raw/
 *.db
 .claude/settings.local.json

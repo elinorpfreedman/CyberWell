@@ -2,7 +2,7 @@
 
 Loads data/processed/index.npy + index_meta.json (see src/build_index.py)
 once (lazily, on first call), embeds the question with Gemini's
-text-embedding-004 (task_type=retrieval_query -- an asymmetric embedding
+gemini-embedding-2 (task_type=retrieval_query -- an asymmetric embedding
 mode tuned for "short query vs. long document" matching, distinct from the
 retrieval_document mode used when the index was built), and returns the
 top-k chunks ranked by cosine similarity.
@@ -27,7 +27,7 @@ load_dotenv()
 
 INDEX_PATH = Path("data/processed/index.npy")
 META_PATH = Path("data/processed/index_meta.json")
-EMBED_MODEL = os.environ.get("CW_EMBED_MODEL", "gemini-embedding-001")
+EMBED_MODEL = os.environ.get("CW_EMBED_MODEL", "gemini-embedding-2")
 DEFAULT_K = int(os.environ.get("CW_TOP_K", 5))
 
 _client = None
