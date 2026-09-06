@@ -104,16 +104,49 @@ def embed_texts(client, texts: list[str], task_type: str, checkpoint_path: Path,
     return np.array(done, dtype="float32")
 
 
-def build_index(chunks_path: Path, out_dir: Path) -> None:
+def _reusable_vectors(out_dir: Path) -> dict[str, list[float]]:
+    """Map chunk text -> embedding from a previous build, when it's safe to reuse.
+
+    Keyed on the chunk text itself, not the chunk id: if a document's content
+    changed, its text changed, so its vector is correctly treated as missing and
+    re-embedded. Reuse is abandoned entirely if the previous index was built with
+    a different embedding model, since vectors from two models aren't comparable.
+    """
+    index_path, meta_path, model_path = out_dir / "index.npy", out_dir / "index_meta.json", out_dir / ".index_model"
+    if not (index_path.exists() and meta_path.exists() and model_path.exists()):
+        return {}
+    if model_path.read_text(encoding="utf-8").strip() != EMBED_MODEL:
+        print(f"Previous index used a different embedding model; rebuilding all vectors.")
+        return {}
+
+    vectors = np.load(index_path)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if len(meta) != vectors.shape[0]:
+        return {}
+    return {chunk["text"]: vectors[i].tolist() for i, chunk in enumerate(meta)}
+
+
+def build_index(chunks_path: Path, out_dir: Path, rebuild: bool = False) -> None:
     chunks = [json.loads(line) for line in chunks_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     if not chunks:
         raise ValueError(f"No chunks found in {chunks_path}. Run src/chunking.py first.")
 
     client = _client()
-    texts = [c["text"] for c in chunks]
     checkpoint_path = out_dir / ".build_index_checkpoint.npy"
-    print(f"Embedding {len(texts)} chunks with '{EMBED_MODEL}'...")
-    embeddings = embed_texts(client, texts, task_type="retrieval_document", checkpoint_path=checkpoint_path)
+
+    # Incremental build: only chunks whose exact text isn't already embedded cost
+    # an API call. Adding documents to the corpus then costs calls proportional to
+    # what was added, not to the whole corpus -- which matters against a daily quota.
+    reusable = {} if rebuild else _reusable_vectors(out_dir)
+    new_texts = [c["text"] for c in chunks if c["text"] not in reusable]
+    print(f"{len(chunks)} chunks: reusing {len(chunks) - len(new_texts)}, embedding {len(new_texts)} with '{EMBED_MODEL}'...")
+
+    fresh = {}
+    if new_texts:
+        vectors = embed_texts(client, new_texts, task_type="retrieval_document", checkpoint_path=checkpoint_path)
+        fresh = {text: vectors[i] for i, text in enumerate(new_texts)}
+
+    embeddings = np.array([reusable.get(c["text"], fresh.get(c["text"])) for c in chunks], dtype="float32")
     if embeddings.shape[0] != len(chunks):
         raise RuntimeError(
             f"Embedded {embeddings.shape[0]} vectors but there are {len(chunks)} chunks -- "
@@ -123,6 +156,9 @@ def build_index(chunks_path: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     np.save(out_dir / "index.npy", embeddings)
     (out_dir / "index_meta.json").write_text(json.dumps(chunks), encoding="utf-8")
+    # Records which model produced these vectors, so a later run can tell whether
+    # reusing them is valid.
+    (out_dir / ".index_model").write_text(EMBED_MODEL, encoding="utf-8")
     checkpoint_path.unlink(missing_ok=True)
 
     print(f"Saved {embeddings.shape[0]} vectors of dim {embeddings.shape[1]} -> {out_dir/'index.npy'}")
@@ -133,13 +169,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--chunks", type=Path, default=CHUNKS_PATH)
     ap.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    ap.add_argument(
+        "--rebuild", action="store_true",
+        help="Re-embed every chunk instead of reusing vectors from the existing index.",
+    )
     args = ap.parse_args()
 
     if not args.chunks.exists():
         print(f"Input not found: {args.chunks}. Run src/chunking.py first.")
         return 1
 
-    build_index(args.chunks, args.out_dir)
+    build_index(args.chunks, args.out_dir, rebuild=args.rebuild)
     return 0
 
 

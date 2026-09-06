@@ -32,8 +32,10 @@ DELAY = 0.75
 
 HEADING_RE = re.compile(r"^###\s+[A-Z]\.\s+(?P<platform>.+?)\s+[—-]\s+\d+\s+[Dd]ocuments?\s*$")
 ROW_RE = re.compile(
+    # The Fetch column (direct|wayback) is matched but not captured: it documents
+    # for a human why a URL is a Wayback link, and the fetcher treats both the same.
     r"^\|\s*(?P<doc_id>DOC-\d+)\s*\|\s*(?P<title>.+?)\s*\|\s*"
-    r"(?P<fetch_mode>direct|wayback)\s*\|\s*(?P<file_type>HTML|PDF)\s*\|\s*"
+    r"(?:direct|wayback)\s*\|\s*(?P<file_type>HTML|PDF)\s*\|\s*"
     r"(?P<url>https?://\S+?)\s*\|\s*$"
 )
 
@@ -42,7 +44,6 @@ ROW_RE = re.compile(
 class Entry:
     doc_id: str
     title: str
-    fetch_mode: str
     file_type: str
     url: str
     platform: str

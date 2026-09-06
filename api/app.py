@@ -12,6 +12,7 @@ pipeline (src/rag.py) is called directly, in-process -- no separate service.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 from api import storage
 from src.rag import answer as rag_answer
@@ -67,8 +69,6 @@ def post_message(conversation_id: str):
         if not storage.conversation_exists(conn, conversation_id):
             return jsonify({"error": f"Conversation '{conversation_id}' not found."}), 404
 
-        storage.add_message(conn, conversation_id, "user", question)
-
         try:
             result = rag_answer(question)
         except RuntimeError as exc:
@@ -76,8 +76,13 @@ def post_message(conversation_id: str):
             # expected failure mode, not a bug -- surfaced as a clean 502.
             return jsonify({"error": f"Could not generate an answer: {exc}"}), 502
 
+        # Write the turn only after generation succeeds, so a failed answer can't
+        # leave an orphaned user message with no reply sitting in the transcript.
+        storage.add_message(conn, conversation_id, "user", question)
         assistant_message_id = storage.add_message(conn, conversation_id, "assistant", result["answer_text"])
-        storage.add_citations(conn, assistant_message_id, result["retrieved_chunks"])
+        storage.add_citations(
+            conn, assistant_message_id, result["retrieved_chunks"], result["source_chunk_ids"]
+        )
 
         cited_ids = set(result["source_chunk_ids"])
         citations = [
@@ -105,15 +110,22 @@ def post_message(conversation_id: str):
         conn.close()
 
 
-@app.errorhandler(404)
-def not_found(_):
-    return jsonify({"error": "Not found."}), 404
+@app.errorhandler(Exception)
+def unhandled_error(exc):
+    """Keep every response JSON, including the unexpected ones.
 
-
-@app.errorhandler(500)
-def server_error(_):
+    Covers both cases: Flask's own HTTP errors (404 on an unknown route, 405, ...)
+    are re-emitted as JSON with their own status, and anything else is logged and
+    returned as a 500. Without this, an unanticipated exception returns Flask's HTML
+    error page (or a full traceback in debug mode), which a JSON client can't parse.
+    """
+    if isinstance(exc, HTTPException):
+        return jsonify({"error": exc.description}), exc.code
+    app.logger.exception("Unhandled error while serving %s", request.path)
     return jsonify({"error": "Internal server error."}), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Debug off by default: it exposes tracebacks and an interactive console.
+    debug = os.environ.get("CW_FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(debug=debug, port=int(os.environ.get("CW_API_PORT", 5000)))

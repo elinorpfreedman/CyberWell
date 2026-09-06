@@ -7,16 +7,48 @@ Reddit (675 chunks). 35 questions, graded by hand.
 
 | Metric | Value |
 | :--- | :--- |
-| Hit rate@3 | 0.812 |
-| Hit rate@5 | 0.812 |
-| Ablation delta (5 - 3) | 0.0 |
+| Hit rate@5 (headline) | 0.812 |
 | Abstain accuracy on absent questions | 1.0 (3/3) |
 | Grades | 32 correct, 1 partially correct, 2 incorrect, 0 unsupported |
+
+### Ablation: hit rate vs. k
+
+`python eval/run_eval.py --ablation` sweeps k across the 32 answerable questions. It
+retrieves once at k=10 and slices that ranked list for each smaller k (the top-3 of a
+top-10 retrieval *is* the top-3), so the whole sweep costs one query embedding per
+question and no generation calls at all. Full output: `eval/results/ablation.json`.
+
+| k | Hit rate@k | Δ vs. previous |
+| :--- | :--- | :--- |
+| 1 | 0.531 | — |
+| 3 | 0.812 | +0.281 |
+| 5 | 0.812 | 0.000 |
+| 10 | 0.938 | +0.126 |
+
+**What this shows:** k matters a great deal at both ends and not at all in the middle.
+Going from k=1 to k=3 recovers 28 points — for nearly a third of questions the single
+best-scoring chunk is *not* the one holding the answer, which is exactly why a
+generation step that reads several chunks beats naive top-1 lookup. Between k=3 and k=5
+nothing changes: the 4th and 5th chunks never contain the first correct hit for any
+question, so the extra context is dead weight for retrieval accuracy (though it's not
+free — it's more tokens in every prompt). Then k=10 adds another 12.6 points, meaning a
+meaningful set of correct chunks is sitting at ranks 6-10, just below the cutoff.
+
+**Why k=5 is still the default:** the k=10 gain is real but comes with a cost the hit-rate
+number doesn't show — twice the context in every prompt, and (per Finding 3 below) this
+model already abstains more readily as context grows noisier. Hit rate@k measures whether
+a usable chunk was *retrieved*, not whether the answer *used* it. The honest read is that
+k=10 is worth testing end-to-end with grading, not that it's automatically better.
 
 An earlier pass of this file analyzed a partial 8-document corpus (25 questions, hit@3=0.762,
 hit@5=0.857). Growing the corpus to 36 documents changed which failure modes actually show
 up -- some earlier findings (a chunk-overlap boundary bug) turned out to be non-reproducing
 noise once the corpus grew, while new ones appeared that only show up at this scale.
+
+Note that hit rate@5 went *down* slightly against the larger corpus (0.857 -> 0.812) even
+though the system got strictly more capable. That's expected: more documents means more
+plausible-looking competitors for every one of the top 5 slots, and Finding 1 below shows
+some of those "losses" aren't losses at all.
 
 ## Finding 1: hit rate@k has a blind spot for corpus-wide duplicated boilerplate
 

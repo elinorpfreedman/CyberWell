@@ -1,0 +1,273 @@
+{
+  "n_answerable_questions": 32,
+  "k_values": [
+    1,
+    3,
+    5,
+    10
+  ],
+  "hit_rate_curve": {
+    "hit_rate_at_1": 0.531,
+    "hit_rate_at_3": 0.812,
+    "hit_rate_at_5": 0.812,
+    "hit_rate_at_10": 0.938
+  },
+  "per_question": [
+    {
+      "question": "What protected attributes does YouTube's hate speech policy cover?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What does YouTube's hate speech policy say about denying a well-documented violent event?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What does YouTube's harassment policy say about sharing a minor's school information?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "According to YouTube's Illegal or Regulated Goods policy, what happens if a channel provides contact information for purchasing hard drugs?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What categories of content does YouTube list as not advertiser-friendly?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question": "What examples of \"extremely dangerous challenges\" does YouTube's Harmful or Dangerous Content policy give?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question": "How does TikTok's Discrimination, Harassment, and Bullying policy define doxxing?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "According to TikTok's policy, what kind of bullying/harassment-related content is allowed as an exception?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How long does a YouTube Community Guidelines warning take to expire if there are no further violations?",
+      "category": "numerical",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question": "How long is a YouTube channel restricted after receiving its first strike?",
+      "category": "numerical",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How long is a YouTube channel restricted after receiving its second strike?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How many strikes within a 90-day period can result in a YouTube channel being permanently removed?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "When was TikTok's Discrimination, Harassment, and Bullying policy last updated?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How many distinct protected-attribute categories are listed in YouTube's hate speech policy?",
+      "category": "numerical",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Under what age is someone considered a minor under YouTube's harassment policy?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare YouTube's PII protections for minors versus its general PII rules for all users.",
+      "category": "comparison",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare how YouTube's strike penalties escalate from a first strike to a third strike.",
+      "category": "comparison",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare TikTok's definition of doxxing with YouTube's rules on sharing personally identifiable information (PII).",
+      "category": "comparison",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare how YouTube's Advertiser-Friendly Content guidelines treat \"hateful and derogatory content\" versus how its Hate Speech policy defines prohibited hate speech.",
+      "category": "comparison",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": false
+    },
+    {
+      "question": "Compare what YouTube's Illegal or Regulated Goods policy and its Harmful or Dangerous Content policy each say about firearms.",
+      "category": "comparison",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare how TikTok and YouTube each carve out exceptions for content that raises awareness about or discusses hateful/harmful topics.",
+      "category": "comparison",
+      "hit_at_1": false,
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "hit_at_10": true
+    },
+    {
+      "question": "What protected categories does X's (Twitter's) hateful conduct policy list?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What protected characteristics does Meta's Hateful Conduct policy define?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How does Meta's Bullying and Harassment policy define a \"public figure\"?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What are Tier 1 designations under Meta's Dangerous Organizations and Individuals policy?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How many roundtables and countries were involved in the consultation process that created Meta's Oversight Board?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What must you do before you can appeal a content decision to Meta's Oversight Board?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "According to X's rules, what criteria determine whether a post qualifies for a public-interest exception?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What is Rule 1 of Reddit's sitewide Content Policy?",
+      "category": "factual",
+      "hit_at_1": false,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "What happens to a community when it is quarantined on Reddit?",
+      "category": "factual",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "How many people does TikTok say are part of its community, per its 2023 Community Guidelines refresh announcement?",
+      "category": "numerical",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    },
+    {
+      "question": "Compare how Meta and X each define which characteristics are protected from hateful attacks.",
+      "category": "comparison",
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "hit_at_10": true
+    }
+  ]
+}

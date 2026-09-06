@@ -17,10 +17,14 @@ needed for that). "Absent" questions are excluded from hit rate (there is
 nothing to hit), but we separately check whether the model correctly
 abstained ("I could not find an answer...") on them.
 
-Ablation: hit rate@3 vs. hit rate@5, to see how much retrieval quality
-depends on how many chunks we bother to look at.
+Ablation (--ablation): sweep k over 1, 3, 5, 10 and report hit rate at each,
+to show how much retrieval quality depends on how many chunks we look at.
+It runs retrieval only -- no generation -- so it costs one query embedding per
+question instead of a full answer, and it never overwrites the hand-graded
+eval_results.jsonl. Results go to eval/results/ablation.json.
 
 Usage: python eval/run_eval.py [--test-set eval/test_set.jsonl] [--k 5]
+       python eval/run_eval.py --ablation
 """
 
 from __future__ import annotations
@@ -40,11 +44,50 @@ TEST_SET_PATH = Path("eval/test_set.jsonl")
 RESULTS_DIR = Path("eval/results")
 DEFAULT_K = 5
 ABLATION_K = 3
+ABLATION_K_VALUES = [1, 3, 5, 10]
 
 
 def hit_at_k(retrieved_chunks: list[dict], expected_chunk_ids: list[str], k: int) -> bool:
     top_k_ids = {c["chunk_id"] for c in retrieved_chunks[:k]}
     return any(chunk_id in top_k_ids for chunk_id in expected_chunk_ids)
+
+
+def run_ablation(test_set_path: Path, results_dir: Path) -> None:
+    """Sweep k over ABLATION_K_VALUES, retrieval only, and save the hit-rate curve.
+
+    Retrieves once per question at max(ABLATION_K_VALUES) and slices that single
+    ranked list for every smaller k -- the top-3 of a top-10 retrieval *is* the
+    top-3 -- so the whole sweep costs one query embedding per question.
+    """
+    questions = [json.loads(line) for line in test_set_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    answerable = [q for q in questions if q["category"] != "absent"]
+    max_k = max(ABLATION_K_VALUES)
+
+    hits = {k: 0 for k in ABLATION_K_VALUES}
+    per_question = []
+    for i, q in enumerate(answerable, start=1):
+        print(f"[{i}/{len(answerable)}] {q['question'][:70]}")
+        retrieved = retrieve(q["question"], k=max_k)
+        row = {"question": q["question"], "category": q["category"]}
+        for k in ABLATION_K_VALUES:
+            hit = hit_at_k(retrieved, q["expected_chunk_ids"], k)
+            row[f"hit_at_{k}"] = hit
+            hits[k] += int(hit)
+        per_question.append(row)
+        time.sleep(1)
+
+    curve = {f"hit_rate_at_{k}": round(hits[k] / len(answerable), 3) for k in ABLATION_K_VALUES}
+    ablation = {
+        "n_answerable_questions": len(answerable),
+        "k_values": ABLATION_K_VALUES,
+        "hit_rate_curve": curve,
+        "per_question": per_question,
+    }
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "ablation.json").write_text(json.dumps(ablation, indent=2), encoding="utf-8")
+    print(f"\nAblation saved -> {results_dir / 'ablation.json'}")
+    print(json.dumps(curve, indent=2))
 
 
 def run(test_set_path: Path, results_dir: Path, k: int) -> None:
@@ -55,16 +98,15 @@ def run(test_set_path: Path, results_dir: Path, k: int) -> None:
     # Resume support: skip questions already answered in a previous (possibly
     # interrupted) run, and write each new result immediately so a failure
     # partway through (e.g. an API quota error) doesn't lose prior progress.
+    # Only successful rows count as done; a row with an error is left out so the
+    # question gets retried on this run.
     already_done = {}
-    previously_errored = []
     if results_path.exists():
         for line in results_path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
                 if row.get("error") is None:
                     already_done[row["question"]] = row
-                else:
-                    previously_errored.append(row)  # retry these, don't carry the failure forward
     results = list(already_done.values())
 
     with results_path.open("a", encoding="utf-8") as f:
@@ -160,13 +202,20 @@ def main() -> int:
     ap.add_argument("--test-set", type=Path, default=TEST_SET_PATH)
     ap.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     ap.add_argument("--k", type=int, default=DEFAULT_K)
+    ap.add_argument(
+        "--ablation", action="store_true",
+        help="Run the retrieval-only k sweep instead of the full eval (no generation calls).",
+    )
     args = ap.parse_args()
 
     if not args.test_set.exists():
         print(f"Test set not found: {args.test_set}")
         return 1
 
-    run(args.test_set, args.results_dir, args.k)
+    if args.ablation:
+        run_ablation(args.test_set, args.results_dir)
+    else:
+        run(args.test_set, args.results_dir, args.k)
     return 0
 
 

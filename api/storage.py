@@ -38,11 +38,17 @@ CREATE TABLE IF NOT EXISTS citations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id TEXT NOT NULL REFERENCES messages(id),
     chunk_id TEXT NOT NULL,
+    text TEXT,
     source_file TEXT,
     title TEXT,
     platform TEXT,
     page INTEGER,
-    score REAL
+    score REAL,
+    -- 1 if the answer actually cited this chunk, 0 if it was retrieved but unused.
+    -- Both are stored: the cited ones are what the answer rests on, and the unused
+    -- ones are what the model saw and rejected, which is what makes a bad answer
+    -- diagnosable after the fact.
+    cited INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
@@ -96,22 +102,31 @@ def add_message(conn: sqlite3.Connection, conversation_id: str, role: str, conte
     return message_id
 
 
-def add_citations(conn: sqlite3.Connection, message_id: str, retrieved_chunks: list[dict]) -> None:
+def add_citations(
+    conn: sqlite3.Connection,
+    message_id: str,
+    retrieved_chunks: list[dict],
+    cited_chunk_ids: list[str],
+) -> None:
+    """Persist the chunks behind one answer, flagging which ones it actually cited."""
+    cited = set(cited_chunk_ids)
     rows = [
         (
             message_id,
             c["chunk_id"],
+            c["text"],
             c["metadata"].get("source_file"),
             c["metadata"].get("title"),
             c["metadata"].get("platform"),
             c["metadata"].get("page"),
             c["score"],
+            1 if c["chunk_id"] in cited else 0,
         )
         for c in retrieved_chunks
     ]
     conn.executemany(
-        "INSERT INTO citations (message_id, chunk_id, source_file, title, platform, page, score) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO citations (message_id, chunk_id, text, source_file, title, platform, page, score, cited) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         rows,
     )
     conn.commit()
@@ -126,8 +141,8 @@ def get_messages(conn: sqlite3.Connection, conversation_id: str) -> list[dict]:
     result = []
     for m in messages:
         citations = conn.execute(
-            "SELECT chunk_id, source_file, title, platform, page, score FROM citations "
-            "WHERE message_id = ? ORDER BY score DESC",
+            "SELECT chunk_id, text, source_file, title, platform, page, score, cited FROM citations "
+            "WHERE message_id = ? ORDER BY cited DESC, score DESC",
             (m["id"],),
         ).fetchall()
         result.append(
@@ -136,7 +151,8 @@ def get_messages(conn: sqlite3.Connection, conversation_id: str) -> list[dict]:
                 "role": m["role"],
                 "content": m["content"],
                 "created_at": m["created_at"],
-                "citations": [dict(c) for c in citations],
+                # `cited` is stored as 0/1 in SQLite; expose it as a real bool.
+                "citations": [{**dict(c), "cited": bool(c["cited"])} for c in citations],
             }
         )
     return result

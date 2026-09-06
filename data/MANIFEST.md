@@ -25,10 +25,24 @@ characters). Where the platform's live page is unreachable by script but the sam
 reachable through a Wayback Machine snapshot (`https://web.archive.org/web/2025/<url>`), the
 manifest points at that snapshot instead — still the platform's own words, just served from an
 archived copy rather than blocked live. Dead links and JS-only pages that had no working
-alternative found in the time available were dropped rather than kept as placeholders. This
-brought the corpus from a drafted 50 down to **36 confirmed-working documents** — smaller
-than the "~50" target, but every entry is real, first-party, and actually retrievable, which
-matters more for a corpus a RAG system is graded on.
+alternative found in the time available were dropped rather than kept as placeholders. That
+first pass brought the drafted 50 down to 36 confirmed-working documents.
+
+**Third pass — back up to 52.** Rather than pad the count back toward the target with the
+URLs that had already failed, the corpus was widened along the sources that had proven
+reliable: 8 more YouTube help-centre policies (that domain answered 12 of 12 plain GETs),
+3 more TikTok newsroom posts, 3 more Reddit help-centre articles and 2 more Meta
+Community Standards, all via the same fetch route already working for their platform.
+Every addition was verified the same way before being added here. The corpus now stands at
+**52 confirmed-working documents**, and no entry is in this table that hasn't returned real,
+on-topic policy text.
+
+One candidate was rejected during this pass and is worth recording: TikTok's
+`countering-hate-speech-and-behavior` newsroom URL returned HTTP 200 with 6,390 characters
+of text — but the title was the generic "Newsroom | TikTok" and the byte count was identical
+to the dead URL that had already poisoned an earlier revision. It is a redirect to the
+newsroom homepage, not an article. A 200 and a healthy character count are not evidence that
+a URL is the document you asked for.
 
 **Second pass — char count isn't enough:** the check above (does stripping script/style leave
 a few thousand characters of text) is necessary but not sufficient. Two documents that passed
@@ -53,14 +67,14 @@ The corpus supports four question categories:
 * **Cross-platform comparison:** how different platforms handle the same situation (e.g.
   account strikes, appeals, quarantine-equivalents).
 
-## 3. Document Inventory (36 confirmed documents)
+## 3. Document Inventory (52 confirmed documents)
 
 Fetch status legend: **direct** = plain HTTP GET to the live URL works; **wayback** = the
 live URL is blocked or JS-rendered, so the Source URL below is a Wayback Machine snapshot of
 it (`web.archive.org/web/2025/<original-url>`, which resolves to the nearest archived
 capture).
 
-### A. Meta (Facebook, Instagram, Threads) — 7 documents
+### A. Meta (Facebook, Instagram, Threads) — 9 documents
 | ID | Document Title | Fetch | File Type | Source URL |
 | :--- | :--- | :--- | :--- | :--- |
 | DOC-01 | Meta Hateful Conduct Policy | wayback | HTML | https://web.archive.org/web/20260103041610/https://transparency.meta.com/policies/community-standards/hateful-conduct/ |
@@ -70,8 +84,10 @@ capture).
 | DOC-05 | Meta: Appealing to the Oversight Board | wayback | HTML | https://web.archive.org/web/2025/https://transparency.meta.com/oversight/appealing-to-oversight-board/ |
 | DOC-06 | Meta Community Standards Enforcement Report | wayback | HTML | https://web.archive.org/web/2025/https://transparency.meta.com/reports/community-standards-enforcement/ |
 | DOC-07 | Meta Misinformation Policy | wayback | HTML | https://web.archive.org/web/2025/https://transparency.meta.com/policies/community-standards/misinformation/ |
+| DOC-52 | Meta Suicide and Self-Injury Policy | wayback | HTML | https://web.archive.org/web/2025/https://transparency.meta.com/policies/community-standards/suicide-self-injury/ |
+| DOC-53 | Meta Account Integrity and Authentic Identity Policy | wayback | HTML | https://web.archive.org/web/2025/https://transparency.meta.com/policies/community-standards/account-integrity-and-authentic-identity/ |
 
-### B. YouTube (Google) — 12 documents
+### B. YouTube (Google) — 20 documents
 | ID | Document Title | Fetch | File Type | Source URL |
 | :--- | :--- | :--- | :--- | :--- |
 | DOC-12 | YouTube Hate Speech Policy | direct | HTML | https://support.google.com/youtube/answer/2801939 |
@@ -86,8 +102,16 @@ capture).
 | DOC-21 | YouTube Community Guidelines Overview | direct | HTML | https://support.google.com/youtube/answer/9288567 |
 | DOC-22 | How YouTube Reviews Content (incl. appeals) | direct | HTML | https://support.google.com/youtube/answer/13304829 |
 | DOC-51 | YouTube Elections Misinformation Policy | direct | HTML | https://support.google.com/youtube/answer/10835034 |
+| DOC-54 | YouTube Violent or Graphic Content Policy | direct | HTML | https://support.google.com/youtube/answer/2802008 |
+| DOC-55 | YouTube Child Safety Policy | direct | HTML | https://support.google.com/youtube/answer/2801999 |
+| DOC-56 | YouTube Suicide, Self-Harm and Eating Disorders Policy | direct | HTML | https://support.google.com/youtube/answer/2802245 |
+| DOC-57 | YouTube Firearms Policy | direct | HTML | https://support.google.com/youtube/answer/7667605 |
+| DOC-58 | YouTube Misinformation Policies (overview) | direct | HTML | https://support.google.com/youtube/answer/10834785 |
+| DOC-59 | YouTube Spam Policy | direct | HTML | https://support.google.com/youtube/answer/2801973 |
+| DOC-60 | YouTube Nudity and Sexual Content Policy | direct | HTML | https://support.google.com/youtube/answer/2802002 |
+| DOC-61 | YouTube Community Guidelines Tips | direct | HTML | https://support.google.com/youtube/answer/12950271 |
 
-### C. TikTok — 5 documents
+### C. TikTok — 8 documents
 | ID | Document Title | Fetch | File Type | Source URL |
 | :--- | :--- | :--- | :--- | :--- |
 | DOC-23 | TikTok: Strengthening Safety, Security & Well-Being Policies | direct | HTML | https://newsroom.tiktok.com/en-us/strengthening-our-policies-to-promote-safety-security-and-wellbeing-on-tiktok |
@@ -95,6 +119,9 @@ capture).
 | DOC-25 | TikTok: Our Commitment to Election Integrity | direct | HTML | https://newsroom.tiktok.com/our-commitment-to-election-integrity |
 | DOC-29 | TikTok Community Guidelines Enforcement Report (Q3 2025) | wayback | HTML | https://web.archive.org/web/2025/https://www.tiktok.com/transparency/en/community-guidelines-enforcement-2025-3 |
 | DOC-32 | TikTok Advertising Hate Speech Restrictions | direct | HTML | https://ads.tiktok.com/resources/help/article/discrimination-harassment-bullying |
+| DOC-62 | TikTok: Combating Misinformation and Election Interference | direct | HTML | https://newsroom.tiktok.com/en-us/combating-misinformation-and-election-interference-on-tiktok |
+| DOC-63 | TikTok: Building to Support Content, Account and Platform Integrity | direct | HTML | https://newsroom.tiktok.com/en-us/building-to-support-integrity |
+| DOC-64 | TikTok: Increasing Transparency into Elections Integrity Efforts | direct | HTML | https://newsroom.tiktok.com/en-us/increasing-transparency-into-our-elections-integrity-efforts |
 
 ### D. X (formerly Twitter) — 6 documents
 | ID | Document Title | Fetch | File Type | Source URL |
@@ -106,7 +133,7 @@ capture).
 | DOC-40 | X Temporary vs. Permanent Suspension Rules | wayback | HTML | https://web.archive.org/web/2025/https://help.twitter.com/en/rules-and-policies/enforcement-options |
 | DOC-41 | X Public Interest Exception & World Leader Speech Rules | wayback | HTML | https://web.archive.org/web/2025/https://help.twitter.com/en/rules-and-policies/public-interest |
 
-### E. Reddit — 6 documents
+### E. Reddit — 9 documents
 | ID | Document Title | Fetch | File Type | Source URL |
 | :--- | :--- | :--- | :--- | :--- |
 | DOC-44 | Reddit Sitewide Content Policy: Rule 1 (Hate Speech & Harassment) | wayback | HTML | https://web.archive.org/web/2024/https://www.redditinc.com/policies/content-policy |
@@ -115,6 +142,9 @@ capture).
 | DOC-47 | Reddit Quarantined Communities Criteria & Appeals | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/360043069012-Quarantined-Communities |
 | DOC-48 | Reddit Safety Filters | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/15484574845460-Safety-Filters |
 | DOC-50 | Reddit Crowd Control | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/15484545006996-Crowd-Control |
+| DOC-65 | Reddit: Do Not Post Violent Content | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/360043513151 |
+| DOC-66 | Reddit Moderation Tools Overview | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/15484384020756 |
+| DOC-67 | Reddit Moderator Code of Conduct — Rule 3: Respect Your Neighbors | wayback | HTML | https://web.archive.org/web/2025/https://support.reddithelp.com/hc/en-us/articles/27031145215252 |
 
 ## 4. Dropped from the original draft (no working replacement found in time)
 
