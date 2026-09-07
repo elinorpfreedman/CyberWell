@@ -38,6 +38,11 @@ with exactly this sentence and nothing else: "{NOT_FOUND_MESSAGE}"
 provided chunks, even partially.
 5. Keep the answer concise and directly responsive to the question."""
 
+# A relaxed variant of rule 4 -- explicitly permitting counting and cross-document
+# comparison -- was tested against the full test set and rejected. It did not fix the
+# abstentions it targeted, and it turned one safe abstention into a confidently wrong
+# count. See eval/results/ablation_prompt.json and the error analysis.
+
 
 def build_user_prompt(question: str, chunks: list[dict]) -> str:
     context_blocks = []

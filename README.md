@@ -165,38 +165,56 @@ corpus). Full methodology, metric definition, and per-question grades are in
 | :--- | :--- |
 | Hit rate@5 | 0.812 |
 | Abstain accuracy on absent questions | 1.0 (3/3) |
-| Answer grades | 32 correct, 1 partially correct, 2 incorrect, 0 unsupported |
+| Answer grades | 29 correct, 6 incorrect, 0 partially correct, 0 unsupported |
 
-**Ablation — hit rate vs. k** (`python eval/run_eval.py --ablation`, retrieval only, no
+**Ablation 1 — hit rate vs. k** (`python eval/run_eval.py --ablation`, retrieval only, no
 generation calls):
 
 | k | 1 | 3 | 5 | 10 |
 | :--- | :--- | :--- | :--- | :--- |
-| Hit rate@k | 0.531 | 0.812 | 0.812 | 0.938 |
+| Hit rate@k | 0.438 | 0.750 | 0.812 | 0.875 |
 
-k matters sharply at both ends and not at all in between: k=1→3 recovers 28 points (for
-almost a third of questions the top-scoring chunk isn't the one with the answer), k=3→5
-changes nothing, and k=10 finds another 12.6 points sitting at ranks 6–10. k=5 remains the
-default because hit rate only measures whether a usable chunk was *retrieved* — doubling
-context has costs the metric doesn't capture. See the error analysis for the full argument.
+Steep, then flat: k=1→3 recovers 31 points, because for more than half of all questions the
+single best-scoring chunk isn't the one holding the answer — that gap is the argument for
+retrieving several chunks and letting generation choose. After k=3 the returns halve and
+halve again. k=5 stays the default because hit rate measures whether a usable chunk was
+*retrieved*, not whether the answer used it, and doubling context has costs the metric
+doesn't capture.
 
-The error analysis surfaces four concrete findings, not just the numbers above: hit rate@k
-has a blind spot for facts duplicated verbatim across many source documents (a fact can be
-"missed" at its pinned chunk while being correctly retrieved and cited from an equally valid
-duplicate elsewhere); cross-document comparison questions have a real retrieval gap; the
-model sometimes abstains even when the right context was retrieved (won't count a fully-
-listed item, won't always synthesize across two platforms); and a chunk-overlap boundary
-issue found in an earlier, smaller corpus run turned out to depend on which chunk retrieval
-happens to surface, not on a fixed defect. Each comes with a concrete fix-to-try.
+**Ablation 2 — loosening the grounding rule.** Three of the six failures are the model
+abstaining on questions whose supporting chunks *were* retrieved, so the obvious fix was
+tested: keep the no-outside-facts rule but explicitly permit counting listed items and
+comparing two things when both sides are in context. It was **rejected**. It missed both
+comparison abstentions it targeted, and on one question it replaced a safe abstention with a
+confident miscount — answering "10 distinct categories" while listing nine. A researcher who
+reads "I could not find an answer" goes and checks; one who reads a cited, confident "10"
+does not. Full output in `eval/results/ablation_prompt.json`.
+
+The error analysis works through three findings behind these numbers: hit rate@k both
+over- and under-counts when a fact is duplicated verbatim across documents (and that
+duplication caused the one factually wrong answer in the run); generation abstains on
+context it already has; and cross-document comparison retrieval fails outright.
+Comparison questions account for 4 of the 6 failures — a 43% failure rate on that category
+against 6% on everything else — and one fix, decomposing them into per-side queries,
+addresses both halves of the problem.
 
 ## Known gaps and what's missing
 
 - **Corpus composition:** 52 documents, but unevenly distributed — 20 YouTube against 6 X,
   because YouTube's help centre answers plain HTTP GETs reliably while X and Meta are only
-  reachable through Wayback snapshots. The MANIFEST records every dropped URL and why.
-- **Comparison-question retrieval:** a single embedded query for "compare A and B" tends to
-  land between A and B in embedding space rather than close to either — see error analysis
-  Finding 4. Query decomposition (retrieve once per side, merge) wasn't implemented.
+  reachable through Wayback snapshots.
+- **Comparison questions** are the system's weakest category, failing at both retrieval (a
+  single embedded query for "compare A and B" lands between A and B rather than near either)
+  and generation (the model won't always synthesize two sides it has in context). Query
+  decomposition — retrieve once per side, compose the comparison from single-source answers —
+  is the one change I'd make first, and it wasn't implemented.
+- **Duplicated boilerplate isn't deduplicated at index time.** YouTube embeds the same
+  strike-summary box in nearly every help article; retrieval returned five copies of it for
+  one question and none of the canonical chunk, producing the run's only factually wrong
+  answer. Near-duplicate detection at build time would fix it.
+- **Chunk size and overlap were never tuned.** 800/150 was a reasoned starting point, not a
+  measured optimum — sweeping it costs a full re-embed of the corpus per setting, which the
+  free-tier daily quota made unaffordable during development.
 - **Grading:** done by hand against the model's actual outputs (not a separate LLM-judge
   pass), so there's no judge-vs-human agreement check to report — the grades in
   `eval_results.jsonl` are the primary human judgment itself.

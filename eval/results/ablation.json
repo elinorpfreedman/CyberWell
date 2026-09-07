@@ -7,10 +7,10 @@
     10
   ],
   "hit_rate_curve": {
-    "hit_rate_at_1": 0.531,
-    "hit_rate_at_3": 0.812,
+    "hit_rate_at_1": 0.438,
+    "hit_rate_at_3": 0.75,
     "hit_rate_at_5": 0.812,
-    "hit_rate_at_10": 0.938
+    "hit_rate_at_10": 0.875
   },
   "per_question": [
     {
@@ -96,7 +96,7 @@
     {
       "question": "How long is a YouTube channel restricted after receiving its second strike?",
       "category": "numerical",
-      "hit_at_1": true,
+      "hit_at_1": false,
       "hit_at_3": true,
       "hit_at_5": true,
       "hit_at_10": true
@@ -136,15 +136,15 @@
     {
       "question": "Compare YouTube's PII protections for minors versus its general PII rules for all users.",
       "category": "comparison",
-      "hit_at_1": true,
-      "hit_at_3": true,
+      "hit_at_1": false,
+      "hit_at_3": false,
       "hit_at_5": true,
       "hit_at_10": true
     },
     {
       "question": "Compare how YouTube's strike penalties escalate from a first strike to a third strike.",
       "category": "comparison",
-      "hit_at_1": true,
+      "hit_at_1": false,
       "hit_at_3": true,
       "hit_at_5": true,
       "hit_at_10": true
@@ -171,7 +171,7 @@
       "hit_at_1": false,
       "hit_at_3": false,
       "hit_at_5": false,
-      "hit_at_10": true
+      "hit_at_10": false
     },
     {
       "question": "Compare how TikTok and YouTube each carve out exceptions for content that raises awareness about or discusses hateful/harmful topics.",
@@ -179,7 +179,7 @@
       "hit_at_1": false,
       "hit_at_3": false,
       "hit_at_5": false,
-      "hit_at_10": true
+      "hit_at_10": false
     },
     {
       "question": "What protected categories does X's (Twitter's) hateful conduct policy list?",
@@ -241,7 +241,7 @@
       "question": "What is Rule 1 of Reddit's sitewide Content Policy?",
       "category": "factual",
       "hit_at_1": false,
-      "hit_at_3": true,
+      "hit_at_3": false,
       "hit_at_5": true,
       "hit_at_10": true
     },

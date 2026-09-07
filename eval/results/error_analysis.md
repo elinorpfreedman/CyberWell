@@ -1,127 +1,145 @@
 # Error Analysis
 
-Final run against the complete corpus: 36 documents across Meta, YouTube, TikTok, X, and
-Reddit (675 chunks). 35 questions, graded by hand.
+52 documents across Meta, YouTube, TikTok, X, and Reddit (868 chunks). 35 questions —
+16 factual, 9 numerical, 7 comparison, 3 with no answer in the corpus — graded by hand
+against the model's actual output. No question errored.
 
 ## Results
 
 | Metric | Value |
 | :--- | :--- |
-| Hit rate@5 (headline) | 0.812 |
+| Hit rate@5 (headline retrieval metric) | 0.812 |
 | Abstain accuracy on absent questions | 1.0 (3/3) |
-| Grades | 32 correct, 1 partially correct, 2 incorrect, 0 unsupported |
+| Answer grades | 29 correct, 6 incorrect, 0 partially correct, 0 unsupported |
 
-### Ablation: hit rate vs. k
+**What hit rate@k measures, and what it doesn't.** For each answerable question: did at
+least one of its `expected_chunk_ids` appear in the top k? It says nothing about *where* in
+the ranking the hit landed, whether every relevant chunk was found, or whether the answer
+actually used it. Recall@k or MRR would be needed for those. Finding 1 below shows a case
+where it undercounts a system that is working correctly.
 
-`python eval/run_eval.py --ablation` sweeps k across the 32 answerable questions. It
-retrieves once at k=10 and slices that ranked list for each smaller k (the top-3 of a
-top-10 retrieval *is* the top-3), so the whole sweep costs one query embedding per
-question and no generation calls at all. Full output: `eval/results/ablation.json`.
+## Ablation 1: hit rate vs. k
+
+`python eval/run_eval.py --ablation` retrieves once per question at k=10 and slices that
+ranked list for each smaller k, so the whole sweep costs one query embedding per question
+and no generation calls. Full output: `eval/results/ablation.json`.
 
 | k | Hit rate@k | Δ vs. previous |
 | :--- | :--- | :--- |
-| 1 | 0.531 | — |
-| 3 | 0.812 | +0.281 |
-| 5 | 0.812 | 0.000 |
-| 10 | 0.938 | +0.126 |
+| 1 | 0.438 | — |
+| 3 | 0.750 | +0.312 |
+| 5 | 0.812 | +0.062 |
+| 10 | 0.875 | +0.063 |
 
-**What this shows:** k matters a great deal at both ends and not at all in the middle.
-Going from k=1 to k=3 recovers 28 points — for nearly a third of questions the single
-best-scoring chunk is *not* the one holding the answer, which is exactly why a
-generation step that reads several chunks beats naive top-1 lookup. Between k=3 and k=5
-nothing changes: the 4th and 5th chunks never contain the first correct hit for any
-question, so the extra context is dead weight for retrieval accuracy (though it's not
-free — it's more tokens in every prompt). Then k=10 adds another 12.6 points, meaning a
-meaningful set of correct chunks is sitting at ranks 6-10, just below the cutoff.
+The curve is steep then flat: k=1→3 recovers 31 points, because for more than half of all
+questions the single best-scoring chunk is not the one holding the answer. That gap is the
+argument for retrieving several chunks and letting generation choose, rather than trusting
+top-1. After k=3 the returns halve and halve again.
 
-**Why k=5 is still the default:** the k=10 gain is real but comes with a cost the hit-rate
-number doesn't show — twice the context in every prompt, and (per Finding 3 below) this
-model already abstains more readily as context grows noisier. Hit rate@k measures whether
-a usable chunk was *retrieved*, not whether the answer *used* it. The honest read is that
-k=10 is worth testing end-to-end with grading, not that it's automatically better.
+**Why k=5 remains the default** even though k=10 scores 6 points higher: hit rate measures
+whether a usable chunk was *retrieved*, not whether the answer used it. Doubling the context
+doubles prompt tokens, and this system's dominant failure mode (Finding 2) is the model
+declining to answer from context it already has — noisier context is unlikely to help that.
+The honest statement is that k=10 is worth testing end-to-end with grading, not that it is
+better.
 
-An earlier pass of this file analyzed a partial 8-document corpus (25 questions, hit@3=0.762,
-hit@5=0.857). Growing the corpus to 36 documents changed which failure modes actually show
-up -- some earlier findings (a chunk-overlap boundary bug) turned out to be non-reproducing
-noise once the corpus grew, while new ones appeared that only show up at this scale.
+## Ablation 2: loosening the grounding rule
 
-Note that hit rate@5 went *down* slightly against the larger corpus (0.857 -> 0.812) even
-though the system got strictly more capable. That's expected: more documents means more
-plausible-looking competitors for every one of the top 5 slots, and Finding 1 below shows
-some of those "losses" aren't losses at all.
+Three of the six failures are the model abstaining on questions whose supporting chunks
+*were* retrieved. That points at the prompt rather than retrieval, so the obvious fix was
+tested: keep rule 4 (no outside facts) but add a rule explicitly permitting the model to
+count items the chunks list and to compare two things when both sides are present. Same
+index, same questions, same k, temperature 0 — only the prompt differs, so retrieval and
+hit rate are identical by construction. Full output: `eval/results/ablation_prompt.json`.
 
-## Finding 1: hit rate@k has a blind spot for corpus-wide duplicated boilerplate
+| | Baseline | Variant |
+| :--- | :--- | :--- |
+| Correct | 29 | 29 |
+| Partially correct | 0 | 1 |
+| Incorrect | 6 | 5 |
+| Abstain accuracy on absent | 1.0 | 1.0 |
 
-Q9 asks how long a YouTube warning takes to expire. The chunk it's pinned to (`DOC-15-002`)
-states the fact, but so does the same shared "what happens when you get a strike" summary
-box embedded verbatim near the end of essentially every other YouTube help article --
-`DOC-12`, `DOC-13`, `DOC-16`, `DOC-17`, `DOC-19`, `DOC-20`, `DOC-51` all carry a copy. At k=5,
-retrieval found five of those *other* valid copies and none of the pinned one, so `hit_at_5`
-reads `false` even though the model answered correctly from equally legitimate sources.
+**Rejected, despite the marginally better grade split.** It missed both comparison
+abstentions it was aimed at — Q16 was unchanged, Q18 produced a comparison but truncated
+TikTok's doxxing definition to "publishing or threatening to publish", dropping the
+"with malicious intent" that is the substance of the rule. And on Q14 it replaced a safe
+abstention with a **confident miscount**: it answered "there are 10 distinct
+protected-attribute categories" and then listed nine of them.
 
-**Why it matters:** a single-chunk_id ground truth silently gets less meaningful as the
-corpus grows and a fact's exact wording is duplicated across more source documents --
-hit rate@k measures whether the *specific pinned chunk* was retrieved, not whether *a*
-correct source was. On a 36-document corpus this already produces a few of these "misses";
-on a much larger real-world corpus it would happen far more often for any near-universal
-boilerplate fact.
+That trade is the wrong direction for this system. A researcher who reads "I could not find
+an answer" goes and checks; a researcher who reads "10 categories" in a cited, confident
+sentence does not. The over-abstention in Finding 2 is a real cost, but it is the visible
+side of calibration that is mostly protecting us — the baseline prompt was kept.
 
-**Fix to try:** grade hit@k against a fact's full duplicate-chunk set (found by exact-text
-match across the corpus at test-set-build time) rather than a single pinned id, or add a
-distinct metric for "was the *fact* retrievable" vs. "was *this exact chunk* retrievable."
+## Finding 1: hit rate@k undercounts facts duplicated across documents
 
-## Finding 2: a previously-real chunking bug turned out to be non-reproducing
+Q5 and Q6 both score `hit_at_5 = false` and both answered correctly and completely. The
+YouTube advertiser-friendly category list is pinned to `DOC-18-002` but also appears in
+`DOC-18-003`; the dangerous-challenge examples are pinned to `DOC-20-005` and also sit in
+`DOC-20-006`. Retrieval surfaced the neighbour, generation answered from it correctly, and
+the metric recorded a miss.
 
-The smaller-corpus error analysis reported that YouTube's strike-system page had a chunk
-whose "Second Strike... 2 weeks" heading was overlap-split from its qualifying clause,
-causing two wrong answers. Re-verifying against the current chunking (after an unrelated fix
-to `loading.py`'s tag-stripping, which shifted this document's chunk boundaries by one), the
-exact same underlying content is still split the same way -- but on this run, retrieval
-happened to surface the chunk that still carries the "First Strike"/"Second Strike" headings
-attached, and both comparison questions that previously got this wrong (Q10, Q17) answered
-correctly. The underlying fragility is still there structurally (see the chunking module's
-docstring), it just didn't happen to bite this time. **Lesson:** a chunking artifact found
-once should be described as "a fragile chunk boundary exists here," not "this specific
-question fails" -- which chunk gets retrieved (and whether the fragile one wins) can change
-with unrelated changes elsewhere in the pipeline.
+The same shape drives Q9's *real* failure, in reverse. YouTube's "what happens when you get
+a strike" summary box is embedded verbatim near the end of nearly every YouTube help
+article. Retrieval returned five copies of that box (`DOC-61`, `DOC-54`, `DOC-17`,
+`DOC-58`, `DOC-16`) and never the pinned `DOC-15-002`. The boilerplate states the
+policy-training rule but not the base rule, so the answer conflated the two: it reported
+that a warning expires 90 days *after completing training*, when in fact a warning expires
+after 90 days on its own and training clears it immediately.
 
-## Finding 3: generation sometimes abstains even when retrieval succeeds
+**Why it matters:** a single pinned chunk id gets less meaningful as a corpus grows and
+common facts appear in more documents — and near-duplicate chunks crowd out the canonical
+one in the top k, which is a retrieval problem the metric cannot see.
 
-Two questions (Q14, Q18) got the correct chunk(s) at both k=3 and k=5, but the model still
-answered "I could not find an answer to this in the corpus":
-- Q14 asks for a *count* of a list that's fully present in the retrieved chunk -- the model
-  won't count items itself, treating that as forbidden "outside" inference.
-- Q18 asks for a **comparison across two platforms**, and even with both platforms' relevant
-  chunks in context, the model abstained rather than synthesizing them.
+**Fix to try:** build the ground truth as a fact's full duplicate-chunk set (exact-text
+match across the corpus at test-set-build time) rather than one pinned id; and deduplicate
+near-identical chunks at index time so five copies of one boilerplate box cannot occupy
+five of the five slots.
 
-This is a different, more concerning failure mode than Finding 4 below (retrieval actually
-failing) -- here the grounding is available and the model still declines. Cross-referenced
-against Finding 4, generation seems to have a lower bar for abstaining on *comparison-shaped*
-questions specifically, independent of whether retrieval actually succeeded.
+## Finding 2: generation abstains on context it already has
 
-**Fix to try:** loosen the system prompt to explicitly permit (a) counting/aggregating
-retrieved items and (b) synthesizing an explicit comparison when both sides' facts are
-present in context, while keeping the no-outside-facts rule for everything else.
+Q14, Q16 and Q18 all retrieved their expected chunks at k=5 and still answered "I could not
+find an answer to this in the corpus":
 
-## Finding 4: cross-document comparisons still have a real retrieval gap
+- **Q14** asks for a *count* of a list that is fully present in the retrieved chunk. The
+  model treats counting as forbidden outside inference.
+- **Q16 and Q18** ask for comparisons. Even with both sides in context, the model declines
+  to synthesize across them.
 
-Comparisons whose two facts live in topically-distant documents continue to fail at
-retrieval: Q20 (illegal goods vs. harmful content firearms) and Q21 (TikTok vs. YouTube
-exceptions) both missed their expected chunks at k=5, same pattern as the smaller-corpus run.
-Q19 looks like a miss by the strict hit@k metric but actually retrieved different, still-
-relevant chunks from the same two target documents and answered correctly from them --
-a reminder that hit@k is a proxy, and sometimes the proxy undercounts a system that's
-actually working (see Finding 1 for the general shape of this problem).
+Ablation 2 shows this is not simply a prompt-wording bug — explicitly licensing both
+behaviours did not reliably fix them, and made Q14 worse. The model appears to have a
+genuinely lower confidence bar for comparison- and aggregation-shaped questions,
+independent of what it was told it may do.
 
-**Fix to try:** unchanged from the smaller-corpus analysis -- query decomposition for
-comparison-shaped questions (retrieve once per side of the comparison, merge results).
+**Fix to try:** handle these outside the prompt. Decompose comparison questions into
+per-side retrievals and ask for each side separately, then compose the comparison
+programmatically — so the model only ever answers single-source questions, which it does
+well (29/35).
 
-## Summary across both corpus sizes
+## Finding 3: cross-document comparison retrieval
 
-The two genuine, reproducible weaknesses are the same at both scales: **cross-document
-comparison retrieval** (Finding 4 here, Finding 2 in the original analysis) and **generation
-being too quick to abstain on some question shapes** (Finding 3 here, Finding 3 originally).
-The chunk-overlap boundary bug (original Finding 1) did not reproduce here and should be
-read as "a real fragility, severity depends on what gets retrieved" rather than a fixed
-defect. The corpus-completeness caveat from the original analysis is resolved -- all 36
-manifest documents are now indexed and exercised by the test set.
+Q20 and Q21 abstained having missed their expected chunks entirely. Both ask about two
+topically distant documents at once — YouTube's illegal-goods vs. harmful-content policies,
+and TikTok's vs. YouTube's awareness-content exceptions. A single embedded query for
+"compare A and B" lands between A and B in embedding space rather than close to either.
+
+This is the clearest structural weakness in the system. Comparison questions are 7 of 35 in
+the test set, and 4 of the 6 failures (Q16, Q18, Q20, Q21) are comparisons — a 43% failure
+rate on that category against 6% on everything else.
+
+**Fix to try:** the same query decomposition as Finding 2. It addresses the retrieval half
+and the generation half of the comparison problem at once, which is why it is the single
+change I would make first with more time.
+
+## Summary
+
+Two weaknesses account for every failure. **Comparison questions** fail at both retrieval
+(Finding 3) and generation (Finding 2), and one fix — decomposing them into per-side
+queries — would target both. **Boilerplate duplicated across documents** (Finding 1)
+distorts the retrieval metric in both directions and caused the one factually wrong answer
+in the run, and would be addressed by index-time near-duplicate detection.
+
+The grounding behaviour itself held up: 3/3 correct abstentions on questions with no
+answer in the corpus, no fabricated citations across 35 answers, and — per Ablation 2 —
+the abstention threshold is where it should be even though it costs three otherwise
+answerable questions.

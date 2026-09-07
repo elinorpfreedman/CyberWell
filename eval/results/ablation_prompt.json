@@ -1,0 +1,41 @@
+{
+  "what_was_varied": "The generation system prompt. The baseline's rule 4 forbids information from outside the retrieved chunks. The variant added a rule explicitly permitting the model to count items the chunks list and to compare two things when the chunks contain both sides, while keeping the no-outside-facts rule.",
+  "why": "In the baseline run, 3 of 6 failures were the model abstaining on questions whose supporting chunks had in fact been retrieved (hit@5 true) -- the dominant fixable failure mode.",
+  "method": "Same index, same 35 questions, same k=5, temperature 0. Retrieval is untouched by a prompt change, so hit rate is identical by construction; only generation differs.",
+  "baseline_grades": {
+    "correct": 29,
+    "incorrect": 6
+  },
+  "variant_grades": {
+    "correct": 29,
+    "incorrect": 5,
+    "partially_correct": 1
+  },
+  "abstain_accuracy_on_absent": {
+    "baseline": 1.0,
+    "variant": 1.0
+  },
+  "questions_that_changed": [
+    {
+      "question_number": 14,
+      "question": "How many distinct protected-attribute categories are listed in YouTube's hate speech policy?",
+      "category": "numerical",
+      "baseline_grade": "incorrect",
+      "variant_grade": "incorrect",
+      "baseline_abstained": true,
+      "variant_abstained": false,
+      "note": "Variant answers instead of abstaining, but states '10 distinct protected-attribute categories' and then lists 9. A fabricated count replaced a safe abstention."
+    },
+    {
+      "question_number": 18,
+      "question": "Compare TikTok's definition of doxxing with YouTube's rules on sharing personally identifiable information (PII).",
+      "category": "comparison",
+      "baseline_grade": "incorrect",
+      "variant_grade": "partially_correct",
+      "baseline_abstained": true,
+      "variant_abstained": false,
+      "note": "Variant produces the comparison, but truncates TikTok's doxxing definition to 'Publishing or threatening to publish', dropping 'personal information about someone online with malicious intent'."
+    }
+  ],
+  "verdict": "Rejected. The variant fixed neither of the two comparison abstentions it was aimed at (Q16 unchanged, Q18 only partially), and on Q14 it replaced a safe abstention with a confident miscount -- it answered '10 categories' while listing 9. For a policy-research tool the fabricated number is a worse failure than the silence it replaced, so the baseline prompt was kept."
+}
