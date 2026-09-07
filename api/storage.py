@@ -4,7 +4,7 @@ Creates its own schema on first run, given a path (CW_DB_PATH, default
 api/cyberwell.db). Three tables:
   - conversations(id, created_at)
   - messages(id, conversation_id, role, content, created_at)
-  - citations(id, message_id, chunk_id, source_file, title, platform, page, score)
+  - citations(id, message_id, chunk_id, text, source_file, title, platform, page, score, cited)
 
 One connection is opened per call (SQLite handles this fine at this scale,
 and it avoids sharing a connection across Flask's request threads).

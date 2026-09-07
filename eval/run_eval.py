@@ -2,8 +2,8 @@
 
 For each question in eval/test_set.jsonl:
   1. Retrieve top-5 chunks once (src/retrieval.py).
-  2. Compute hit@3 and hit@5 from that same retrieval (hit@3 is just the first
-     3 of the top-5 list, so no second API call is needed for the ablation).
+  2. Compute hit@5 (the headline metric) and hit@3 from that same retrieval,
+     since the top-3 of a top-5 list is just its first 3 -- no second call.
   3. Generate an answer from the retrieved chunks (src/generation.py).
   4. Save everything -- including an empty "grade"/"grade_notes" field -- to
      eval/results/eval_results.jsonl for manual grading afterward.
@@ -43,7 +43,7 @@ from src.retrieval import retrieve
 TEST_SET_PATH = Path("eval/test_set.jsonl")
 RESULTS_DIR = Path("eval/results")
 DEFAULT_K = 5
-ABLATION_K = 3
+SECONDARY_K = 3  # reported next to hit@5 for context; the real k sweep is --ablation
 ABLATION_K_VALUES = [1, 3, 5, 10]
 
 
@@ -120,7 +120,7 @@ def run(test_set_path: Path, results_dir: Path, k: int) -> None:
             is_answerable = q["category"] != "absent"
 
             try:
-                retrieved = retrieve(q["question"], k=max(k, ABLATION_K))
+                retrieved = retrieve(q["question"], k=max(k, SECONDARY_K))
                 gen = generate_answer(q["question"], retrieved[:k])
                 time.sleep(3)  # stay comfortably under free-tier requests-per-minute caps
                 row = {
@@ -129,7 +129,7 @@ def run(test_set_path: Path, results_dir: Path, k: int) -> None:
                     "reference_answer": q["reference_answer"],
                     "expected_chunk_ids": expected,
                     "retrieved_chunk_ids": [c["chunk_id"] for c in retrieved[:k]],
-                    "hit_at_3": hit_at_k(retrieved, expected, ABLATION_K) if is_answerable else None,
+                    "hit_at_3": hit_at_k(retrieved, expected, SECONDARY_K) if is_answerable else None,
                     "hit_at_5": hit_at_k(retrieved, expected, DEFAULT_K) if is_answerable else None,
                     "cited_chunk_ids": gen["source_chunk_ids"],
                     "answer_text": gen["answer_text"],
@@ -187,7 +187,6 @@ def run(test_set_path: Path, results_dir: Path, k: int) -> None:
         "n_absent": len(absent),
         "hit_rate_at_3": round(hit_rate_3, 3),
         "hit_rate_at_5": round(hit_rate_5, 3),
-        "ablation_delta_5_minus_3": round(hit_rate_5 - hit_rate_3, 3),
         "abstain_accuracy_on_absent": round(abstain_accuracy, 3),
     }
     (results_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

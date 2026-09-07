@@ -119,7 +119,7 @@ comparison-shaped questions (retrieve once per side of the comparison, merge res
 ## Summary across both corpus sizes
 
 The two genuine, reproducible weaknesses are the same at both scales: **cross-document
-comparison retrieval** (Finding 4here, Finding 2 in the original analysis) and **generation
+comparison retrieval** (Finding 4 here, Finding 2 in the original analysis) and **generation
 being too quick to abstain on some question shapes** (Finding 3 here, Finding 3 originally).
 The chunk-overlap boundary bug (original Finding 1) did not reproduce here and should be
 read as "a real fragility, severity depends on what gets retrieved" rather than a fixed

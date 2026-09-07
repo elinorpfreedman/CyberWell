@@ -3,7 +3,7 @@
 Reads data/processed/chunks.jsonl (see src/chunking.py), embeds each chunk's
 text with Gemini's gemini-embedding-2 (task_type=retrieval_document), and
 writes:
-  - data/processed/index.npy       a (n_chunks, 768) float32 array of embeddings
+  - data/processed/index.npy       a (n_chunks, 3072) float32 array of embeddings
   - data/processed/index_meta.json a list of chunk metadata, same row order
 
 Deterministic: re-running after deleting these two files reproduces them
@@ -17,6 +17,7 @@ Usage: python src/build_index.py [--chunks data/processed/chunks.jsonl] [--out-d
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -47,19 +48,44 @@ def _client():
     return genai.Client(api_key=api_key)
 
 
+def _texts_fingerprint(texts: list[str]) -> str:
+    """Stable hash of the exact text list, in order, that a checkpoint belongs to."""
+    h = hashlib.sha256()
+    for text in texts:
+        h.update(text.encode("utf-8"))
+        h.update(b"\0")
+    return h.hexdigest()
+
+
 def embed_texts(client, texts: list[str], task_type: str, checkpoint_path: Path, model: str = EMBED_MODEL) -> np.ndarray:
     """Embed `texts` in batches, retrying transient failures with backoff.
 
     Saves a checkpoint after every batch, so a hard failure partway through
     (a free-tier daily quota cap, say) loses at most one batch of progress,
     not the whole run -- rerunning the script picks up where it left off.
+
+    The checkpoint holds vectors by *position* in `texts`, so it is only valid
+    for the exact list that produced it. Editing the corpus between runs
+    reorders that list -- a replaced document shifts every later entry -- so
+    the checkpoint is fingerprinted and discarded when it no longer matches,
+    rather than silently pairing saved vectors with different chunks.
     """
     from google.genai import types
 
+    fingerprint_path = checkpoint_path.with_suffix(".fingerprint")
+    fingerprint = _texts_fingerprint(texts)
+
     done: list[list[float]] = []
     if checkpoint_path.exists():
-        done = np.load(checkpoint_path).tolist()
-        print(f"Resuming from checkpoint: {len(done)}/{len(texts)} chunks already embedded.")
+        saved = fingerprint_path.read_text(encoding="utf-8").strip() if fingerprint_path.exists() else ""
+        if saved == fingerprint:
+            done = np.load(checkpoint_path).tolist()
+            print(f"Resuming from checkpoint: {len(done)}/{len(texts)} chunks already embedded.")
+        else:
+            print("Checkpoint was built for a different set of chunks; discarding it and starting over.")
+            checkpoint_path.unlink(missing_ok=True)
+            fingerprint_path.unlink(missing_ok=True)
+    fingerprint_path.write_text(fingerprint, encoding="utf-8")
 
     for start in range(len(done), len(texts), BATCH_SIZE):
         batch = texts[start : start + BATCH_SIZE]
@@ -160,6 +186,7 @@ def build_index(chunks_path: Path, out_dir: Path, rebuild: bool = False) -> None
     # reusing them is valid.
     (out_dir / ".index_model").write_text(EMBED_MODEL, encoding="utf-8")
     checkpoint_path.unlink(missing_ok=True)
+    checkpoint_path.with_suffix(".fingerprint").unlink(missing_ok=True)
 
     print(f"Saved {embeddings.shape[0]} vectors of dim {embeddings.shape[1]} -> {out_dir/'index.npy'}")
     print(f"Saved matching metadata -> {out_dir/'index_meta.json'}")

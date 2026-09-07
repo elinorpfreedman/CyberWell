@@ -26,9 +26,14 @@ Thumbs.db
 *.log
 
 # Raw fetched corpus: reproducible from data/MANIFEST.md via src/fetch_corpus.py,
-# and large/not-clearly-redistributable at ~35MB -- see the assignment's own allowance
+# and large/not-clearly-redistributable at ~49MB -- see the assignment's own allowance
 # for this. data/processed/ (cleaned text + chunks + embeddings, our own derived
 # artifacts) and data/MANIFEST.md ARE committed.
 data/raw/
+
+# Transient build state: written while build_index.py is embedding, deleted on
+# success. Only present if a build was interrupted, and never worth committing.
+data/processed/.build_index_checkpoint.*
+
 *.db
 .claude/settings.local.json
